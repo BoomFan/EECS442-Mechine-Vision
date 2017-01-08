@@ -1,0 +1,730 @@
+\documentclass[letterpaper]{article}
+\usepackage{amssymb}
+\usepackage{fullpage}
+\usepackage{changepage}
+\usepackage{amsmath}
+\usepackage{epsfig,float,alltt}
+\usepackage{psfrag,xr}
+\usepackage[T1]{fontenc}
+\usepackage{url}
+\usepackage{pdfpages}
+\usepackage{epstopdf}
+\usepackage[framed,numbered,autolinebreaks,useliterate]{mcode}
+\usepackage{indentfirst}
+\usepackage{tikz,mathpazo}
+\usepackage{graphicx}
+\usepackage{subfigure}
+%\includepdfset{pagecommand=\thispagestyle{fancy}}
+\author{Fan Bu\\ UMID: 68836435\\ Unique Name: fanbu}
+\title{EECS 442 Computer Vision Homework 04}
+
+\begin{document}
+\date{11/21/2016}
+\maketitle
+
+\newcommand{\trace}{\mathrm{trace}}
+\newcommand{\real}{\mathbb R}  % real numbers  {I\!\!R}
+\newcommand{\nat}{\mathbb N}   % Natural numbers {I\!\!N}
+\newcommand{\cp}{\mathbb C}    % complex numbers  {I\!\!\!\!C}
+\newcommand{\ds}{\displaystyle}
+\newcommand{\mf}[2]{\frac{\ds #1}{\ds #2}}
+\newcommand{\spanof}[1]{\textrm{span} \{ #1 \}}
+\newcommand{\sol}[0]{\textbf{Solution: }}
+\newcommand{\pf}[0]{\textbf{Proof:}}
+\newcommand{\rme}[0]{\textrm{e}}
+\newcommand{\Null}[1]{\textrm{Null}\{#1\}}
+\parindent 0pt
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Solution for Question 1 begins here - by Fan Bu
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Question 1, Harris Corner Detection}
+\subsection*{(a)}
+In this section, we choose $w =3 $ for the size of the window $W$.\\
+
+Image result is shown in Figure \ref{q1_a_w_3}:\\
+\begin{figure}[H] \centering
+\subfigure[Result for I1.png] { \label{q1_a_fig:a}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_a_I1.jpeg}
+}
+\subfigure[Result for I3.png] { \label{q1_a_fig:b}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_a_I3.jpeg}
+}
+\caption{Harris Corner Detection, $w=3$}
+\label{q1_a_w_3}
+\end{figure}
+
+Key steps of the algorithm:\\
+Step1, Compute magnitude of the x and y gradients at each pixel.\\
+Step2, Due to Harris, construct a Gaussian window M around each pixel.\\
+Step3, Compute $\lambda_s$ of second moment matrix $M$ \\
+Step4, Compute $R=det(M)-k(tr(M))^2$ \\
+Step5, Set proper threshold $T$ \\
+Step6, If $R> T$, a corner is detected; then, retain point of local maxima. \\
+Step7, Superpose corners on images.\\
+
+More explanation is written in the attach code.\\
+\begin{lstlisting}
+%% EECS 442 - HW 04 - Q1 Harris Corner Detection
+%  ------------------------------------------------------------------------
+%  Date: 11 / 21 / 2016
+%  Author: Fan Bu
+%  ------------------------------------------------------------------------
+%  ellipse(ra,rb,ang,x0,y0,C,Nb)
+%  ------------------------------------------------------------------------
+%  Instructions(Latex code)
+% Key steps of the algorithm:\\
+% Step1, Compute magnitude of the x and y gradients at each pixel.\\
+% Step2, Due to Harris, construct a Gaussian window M around each pixel.\\
+% Step3, Compute $\lambda_s$ of second moment matrix $M$ \\
+% Step4, Compute $R=det(M)-k(tr(M))^2$ \\
+% Step5, Set proper threshold $T$ \\
+% Step6, If $R> T$, a corner is detected; then, retain point of local maxima. \\
+% Step7, Superpose corners on images.\\
+
+%% ----------------------- Initialization -----------------------
+clear all;
+close all;
+clc;
+%% ----------------------- Load data ----------------------------
+img1 = imread('I1.png');
+img2 = imread('I3.png');
+
+img = img2;
+w = 3; %choose window size
+
+%% ------------ Compute M,R and ellipse parameter --------
+% translate to gray image
+gray_img = rgb2gray(img);
+[height,width] = size(gray_img);
+% initialize corner position
+is_edge = zeros(height, width);
+% initialize R score
+R = zeros(height, width);
+
+% applying sobel edge detector in the horizontal direction
+fx = [-1 0 1;
+    -1 0 1;
+    -1 0 1];
+Ix = filter2(fx,gray_img);
+% applying sobel edge detector in the vertical direction
+fy = [1 1 1;
+    0 0 0;
+    -1 -1 -1];
+Iy = filter2(fy,gray_img);
+% compute terms for second moment matrix M
+Ix2 = Ix.^2;
+Iy2 = Iy.^2;
+Ixy = Ix.*Iy;
+
+% perform gaussian filtering for eliminating noises
+h= fspecial('gaussian',[w w],2);
+Ix2 = filter2(h,Ix2);
+Iy2 = filter2(h,Iy2);
+Ixy = filter2(h,Ixy);
+
+% Initialize Perem
+Rmax = 0;
+figure;
+imshow(img);
+hold on;
+for i = 1:height
+    for j = 1:width
+        % compute second moment matrix M
+        M = [
+            Ix2(i,j), Ixy(i,j);
+            Ixy(i,j) Iy2(i,j)
+            ];
+        % compute R(i,j) = det(M)-0.04*(trace(M))^2
+        R(i,j) = det(M)-0.04*(trace(M))^2;
+        if R(i,j) > Rmax
+           Rmax = R(i,j);
+        end;
+
+    end;
+end;
+num_edge = 0;
+Rmax
+T=0.1*Rmax
+% determine corner by comparing with threshold and all neighbor points
+for i = 2:height-1
+    for j = 2:width-1
+        if R(i,j) > T ...
+            && R(i,j) > R(i-1,j-1) ...
+            && R(i,j) > R(i-1,j) ...
+            && R(i,j) > R(i-1,j+1) ...
+            && R(i,j) > R(i,j-1) ...
+            && R(i,j) > R(i,j+1) ...
+            && R(i,j) > R(i+1,j-1) ...
+            && R(i,j) > R(i+1,j) ...
+            && R(i,j) > R(i+1,j+1)
+
+            is_edge(i,j) = 1;
+            num_edge = num_edge+1;
+        end;
+    end;
+end;
+[edge_col, edge_row] = find(is_edge == 1);
+num_edge
+%% -------------- Draw corners on image and save -----------------
+plot(edge_row, edge_col,'r*','linewidth',1.1);
+print(gcf,'-djpeg' ,'HW4_q1_a_I3.jpeg','-r400')
+\end{lstlisting}
+\subsection*{(b)}
+Repeat this step by using different sizes of the window $W = 3, 4, 6, 9$. Results are shown in the following figures (Note that pictures are zoomed in):\\
+
+\begin{figure}[H] \centering
+\subfigure[Result for I1.png] { \label{q1_b_w_3_fig:a}
+\includegraphics[width=0.9\columnwidth]{HW4_q1_b_w_3_I1.jpeg}
+}
+\subfigure[Result for I3.png] { \label{q1_b_w_3_fig:b}
+\includegraphics[width=0.9\columnwidth]{HW4_q1_b_w_3_I3.jpeg}
+}
+\caption{Superimpose Ellipses, $w=3$}
+\label{q1_b_w_3}
+\end{figure}
+
+\begin{figure}[H] \centering
+\subfigure[Result for I1.png] { \label{q1_b_w_4_fig:a}
+\includegraphics[width=0.9\columnwidth]{HW4_q1_b_w_4_I1.jpeg}
+}
+\subfigure[Result for I3.png] { \label{q1_b_w_4_fig:b}
+\includegraphics[width=0.9\columnwidth]{HW4_q1_b_w_4_I3.jpeg}
+}
+\caption{Superimpose Ellipses, $w=4$}
+\label{q1_b_w_4}
+\end{figure}
+
+\begin{figure}[H] \centering
+\subfigure[Result for I1.png] { \label{q1_b_w_6_fig:a}
+\includegraphics[width=0.9\columnwidth]{HW4_q1_b_w_6_I1.jpeg}
+}
+\subfigure[Result for I3.png] { \label{q1_b_w_6_fig:b}
+\includegraphics[width=0.9\columnwidth]{HW4_q1_b_w_6_I3.jpeg}
+}
+\caption{Superimpose Ellipses, $w=6$}
+\label{q1_b_w_6}
+\end{figure}
+
+\begin{figure}[H] \centering
+\subfigure[Result for I1.png] { \label{q1_b_w_9_fig:a}
+\includegraphics[width=0.9\columnwidth]{HW4_q1_b_w_9_I1.jpeg}
+}
+\subfigure[Result for I3.png] { \label{q1_b_w_9_fig:b}
+\includegraphics[width=0.9\columnwidth]{HW4_q1_b_w_9_I3.jpeg}
+}
+\caption{Superimpose Ellipses, $w=9$}
+\label{q1_b_w_9}
+\end{figure}
+
+
+From figures above, we can see that while $w = 3$ gives ellipses with the most distinguishable shapes, and $w = 4$ gives reasonable result. However, the ellipses' changes are too small to be noticed when $w = 6$ and $w = 9$.\\
+
+In conclusion, as window size becomes larger, the ellipses change would be more difficult to be observed.\\
+
+Codes are attached below:\\
+\begin{lstlisting}
+%% EECS 442 - HW 04 - Q1 Harris Corner Detection
+%  ------------------------------------------------------------------------
+%  Date: 11 / 21 / 2016
+%  Author: Fan Bu
+%  ------------------------------------------------------------------------
+%  ellipse(ra,rb,ang,x0,y0,C,Nb)
+%  ------------------------------------------------------------------------
+%  Instructions(Latex code)
+% Key steps of the algorithm:\\
+% Step1, Compute magnitude of the x and y gradients at each pixel.\\
+% Step2, Due to Harris, construct a Gaussian window M around each pixel.\\
+% Step3, Compute $\lambda_s$ of second moment matrix $M$ \\
+% Step4, Compute $R=det(M)-k(tr(M))^2$ \\
+% Step5, Set proper threshold $T$ \\
+% Step6, If $R> T$, a corner is detected; then, retain point of local maxima. \\
+% Step7, Superpose corners on images.\\
+
+%% Initialization
+clear all;
+close all;
+clc;
+%% ----------------------- Load data ----------------------------
+img1 = imread('I1.png');
+img2 = imread('I3.png');
+
+img = img2;
+w = 3; %choose window size
+
+%% ------------ Part 1: compute M,R and ellipse parameter --------
+% translate to gray image
+gray_img = rgb2gray(img);
+[height,width] = size(gray_img);
+% initialize corner position
+is_edge = zeros(height, width);
+% initialize R score
+R = zeros(height, width);
+
+% applying sobel edge detector in the horizontal direction
+fx = [-1 0 1;
+    -1 0 1;
+    -1 0 1];
+Ix = filter2(fx,gray_img);
+% applying sobel edge detector in the vertical direction
+fy = [1 1 1;
+    0 0 0;
+    -1 -1 -1];
+Iy = filter2(fy,gray_img);
+% compute terms for second moment matrix M
+Ix2 = Ix.^2;
+Iy2 = Iy.^2;
+Ixy = Ix.*Iy;
+
+% perform gaussian filtering for eliminating noises
+h= fspecial('gaussian',[w w],2);
+Ix2 = filter2(h,Ix2);
+Iy2 = filter2(h,Iy2);
+Ixy = filter2(h,Ixy);
+
+% Initialize ellipsePerem
+ellipsePerem = [];
+Rmax = 0;
+figure;
+imshow(img(1:height/2,1:width/2,:),'border','tight','initialmagnification','fit');
+hold on;
+for i = 1:height
+    for j = 1:width
+        % compute second moment matrix M
+        M = [
+            Ix2(i,j), Ixy(i,j);
+            Ixy(i,j) Iy2(i,j)
+            ];
+        % compute R(i,j) = det(M)-0.04*(trace(M))^2
+        R(i,j) = det(M)-0.04*(trace(M))^2;
+        if R(i,j) > Rmax
+           Rmax = R(i,j);
+        end;
+
+    end;
+end;
+num_edge = 0;
+Rmax
+T=0.1*Rmax
+% determine corner by comparing with threshold and all neighbor points
+for i = 2:height-1
+    for j = 2:width-1
+        M = [
+                 Ix2(i,j), Ixy(i,j);
+                 Ixy(i,j) Iy2(i,j)
+            ];
+        % compute M's eigenvalue
+        [vector,lambda] = eig(M);
+        lambda = diag(lambda);
+        % compute radius associate to the ellipse
+        [lambda1,index] = max(lambda);
+        lambda2 = min(lambda);
+        a = lambda1^(-0.5);
+        b = lambda2^(-0.5);
+        vector = vector(:,index);
+        angle = atan(vector(2)/vector(1));
+        % form an ellipsePerem
+        if mod(i,4) == 0 && mod(j,4) == 0
+            ellipsePerem = [ellipsePerem;a b angle j i];
+        end
+        if R(i,j) > T ...
+            && R(i,j) > R(i-1,j-1) ...
+            && R(i,j) > R(i-1,j) ...
+            && R(i,j) > R(i-1,j+1) ...
+            && R(i,j) > R(i,j-1) ...
+            && R(i,j) > R(i,j+1) ...
+            && R(i,j) > R(i+1,j-1) ...
+            && R(i,j) > R(i+1,j) ...
+            && R(i,j) > R(i+1,j+1)
+
+            is_edge(i,j) = 1;
+            num_edge = num_edge+1;
+        end;
+    end;
+end;
+[edge_col, edge_row] = find(is_edge == 1);
+num_edge
+%% ========== Part 2: Plot ellipse and corner on image ====================
+
+ellipse(ellipsePerem(:,1), ellipsePerem(:,2), ellipsePerem(:,3), ...
+    ellipsePerem(:,4),ellipsePerem(:,5));
+print(gcf,'-djpeg' ,['HW4_q1_b_w_',num2str(w),'_I3.jpeg'],'-r400')
+\end{lstlisting}
+
+\subsection*{(c)}
+The thresholds are chosen as $T = t\cdot R_{max}$, where $R_{max}$ is defined as the maximum corner response and takes value of $9.4191\times 10^9$ for I1.png, and $1.0741\times 10^{10}$ for I3.png.\\
+
+Take $t = 0.001, 0.01, 0.05, 0.1$, and the results are shown in figures \ref{q1_c_t_001},\ref{q1_c_t_01},\ref{q1_c_t_05},\ref{q1_c_t_1}:\\
+
+\begin{figure}[H] \centering
+\subfigure[$t=0.001$ for I1.png] { \label{q1_c_t_001_fig:a}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_c_t_001_I1.jpeg}
+}
+\subfigure[$t=0.001$ for I3.png] { \label{q1_c_t_001_fig:b}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_c_t_001_I3.jpeg}
+}
+\caption{Harris Corner Detection results with different threshold, $T = tR_{max}, t=0.001$}
+\label{q1_c_t_001}
+\end{figure}
+
+\begin{figure}[H] \centering
+\subfigure[$t=0.01$ for I1.png] { \label{q1_c_t_01_fig:a}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_c_t_01_I1.jpeg}
+}
+\subfigure[$t=0.01$ for I3.png] { \label{q1_c_t_01_fig:b}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_c_t_01_I3.jpeg}
+}
+\caption{Harris Corner Detection results with different threshold, $T = tR_{max}, t=0.01$}
+\label{q1_c_t_01}
+\end{figure}
+
+\begin{figure}[H] \centering
+\subfigure[$t=0.05$ for I1.png] { \label{q1_c_t_05_fig:a}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_c_t_05_I1.jpeg}
+}
+\subfigure[$t=0.05$ for I3.png] { \label{q1_c_t_05_fig:b}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_c_t_05_I3.jpeg}
+}
+\caption{Harris Corner Detection results with different threshold, $T = tR_{max}, t=0.05$}
+\label{q1_c_t_05}
+\end{figure}
+
+\begin{figure}[H] \centering
+\subfigure[$t=0.1$ for I1.png] { \label{q1_c_t_1_fig:a}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_c_t_1_I1.jpeg}
+}
+\subfigure[$t=0.1$ for I3.png] { \label{q1_c_t_1_fig:b}
+\includegraphics[width=0.45\columnwidth]{HW4_q1_c_t_1_I3.jpeg}
+}
+\caption{Harris Corner Detection results with different threshold, $T = tR_{max}, t=0.1$}
+\label{q1_c_t_1}
+\end{figure}
+
+By comparing these Figures, we can see that a reasonable result is shown when $T = 0.01R_{max}$.\\
+
+From Figure \ref{q1_c_t_001}, more edge points were detected than the actual corner points when $T = 0.001R{max}$ , indicating this threshold is too low. \\
+Same reasoning, when $T = 0.1R_{max}$ and $T = 0.05R_{max}$, detection results tend to lose some corner points, indicating these thresholds are too high.\\
+
+In conclusion, $t=0.01$ may be an ideal threshold for $T = t\cdot R_{max}$.\\
+\clearpage
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Solution for Question 2 begins here - by Fan Bu
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Question 2, Blob Detection}
+\subsection*{(a)}
+\subsubsection*{(1)}
+Algorithm outline:\\
+1. Build a Laplacian scale space, starting with some initial scale and going for $n$ iterations.\\
+2. Generate a scale-normalized Laplacian of Gaussian filter at a given scale "$sigma$".\\
+3. Filter image with the scale-normalized Laplacian. \\
+4. Save square of Laplacian filter response for current level of scale space. \\
+5. Determine threshold by multiply the scale with a factor $k$. \\
+6. Perform non-maximum suppression in scale space. \\
+7. Display resulting circles at their characteristic scales.\\
+
+Codes are attached at the bottom of this question.\\
+\subsubsection*{(2)}
+The safety factor $k$ should depend on the largest scale at which we want regions to be detected. Therefore, the thresholds are chosen as $T = k\cdot scaleSpace_{max}$, where $scaleSpace_{max}$ is defined as the maximum scale space representation and takes value of $1.1669\times 10^4$. Take $k = 0.1, 0.2, 0.3, 0.4$, and results are shown in Figure \ref{HW4_q2_k_01},\ref{HW4_q2_k_02},\ref{HW4_q2_k_03},\ref{HW4_q2_k_04}. The exact threshold $T$ can be seen on the top of the figures.\\
+\begin{figure}[H]
+\begin{center}
+\includegraphics[width = 14cm]{HW4_q2_k_01.jpeg}
+\end{center}
+\caption{Harris Corner Detection results with $k=0.1$, $T\approx 1166$}
+\label{HW4_q2_k_01}
+\end{figure}
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics[width = 14cm]{HW4_q2_k_02.jpeg}
+\end{center}
+\caption{Harris Corner Detection results with $k=0.2$, $T\approx 2333$}
+\label{HW4_q2_k_02}
+\end{figure}
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics[width = 14cm]{HW4_q2_k_03.jpeg}
+\end{center}
+\caption{Harris Corner Detection results with $k=0.3$, $T\approx 3500$}
+\label{HW4_q2_k_03}
+\end{figure}
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics[width = 14cm]{HW4_q2_k_04.jpeg}
+\end{center}
+\caption{Harris Corner Detection results with $k=0.4$, $T\approx 4667$}
+\label{HW4_q2_k_04}
+\end{figure}
+
+From the figures above, we can see that while $k = 0.2$ captures a reasonable result. When $k = 0.3$, less blobs are detected but still acceptable. \\
+While $k = 0.1$ includes some dummy points in the picture, for example those blobs in the sky, indicating this threshold is too small. Same reasoning, when $k = 0.4$, the detection only capture very limited nearby blobs. In that case, the threshold is too high. \\
+
+%From question, we know that a line
+%$$l=\begin{Bmatrix}
+%\left.\begin{matrix}
+%r\begin{bmatrix}
+%cos\alpha \\
+%cos\beta\\
+%cos\gamma
+%\end{bmatrix}
+%\end{matrix}\right|& r\in \mathbb{R}
+%\end{Bmatrix}$$
+%can be interpreted in homogeneous coordinate system as
+%$$l=\begin{Bmatrix}
+%\left.\begin{matrix}
+%\begin{bmatrix}
+%cos\alpha \\
+%cos\beta\\
+%cos\gamma\\
+%\frac{1}{r}
+%\end{bmatrix}
+%\end{matrix}\right|& r\in \mathbb{R}
+%\end{Bmatrix}$$
+%
+%As the world coordinate radius of image plane goes to infinity, parallel lines will intersect at one point.\\
+%When $r$ goes to infinity, line $l$ will reach the vanishing point. Therefore, by converting between world coordinates and image coordinates, we can write the vanishing point as
+%\begin{align*}
+%v&=\lim_{r\rightarrow \infty }\begin{bmatrix}
+%K & 0
+%\end{bmatrix}\begin{bmatrix}
+%R & T \\
+%0 & 1
+%\end{bmatrix}
+%\begin{bmatrix}
+%cos\alpha \\
+%cos\beta\\
+%cos\gamma\\
+%\frac{1}{r}
+%\end{bmatrix}\\
+%\therefore v&=\begin{bmatrix}
+%K & 0
+%\end{bmatrix}\begin{bmatrix}
+%R & T \\
+%0 & 1
+%\end{bmatrix}
+%\begin{bmatrix}
+%cos\alpha \\
+%cos\beta\\
+%cos\gamma\\
+%0
+%\end{bmatrix}\\
+%&=\begin{bmatrix}
+%K & 0
+%\end{bmatrix}\begin{bmatrix}
+%Rd \\
+%0
+%\end{bmatrix}\\
+%&=KRd
+%\end{align*}\\
+%where $K$ is the camera calibration matrix and $R$ is the rotation matrix between the camera and the world coordinates.
+%\subsection*{(b)}
+%First, show $R^{-1}$ exists:\\
+%We know that the rotation matrix
+%$$
+%R=\begin{bmatrix}
+%1 & 0 & 0 \\
+%0 & cos\theta_x & -sin\theta_x \\
+%0 & sin\theta_x  & cos\theta_x
+%\end{bmatrix}
+%\begin{bmatrix}
+%cos\theta_y & 0 & -sin\theta_y\\
+%0 & 1 & 0\\
+%sin\theta_y & 0 & cos\theta_y
+%\end{bmatrix}
+%\begin{bmatrix}
+%cos\theta_z & -sin\theta_z & 0\\
+%sin\theta_z & cos\theta_z & 0\\
+%0 & 0 & 1
+%\end{bmatrix}
+%$$\\
+%And $$det(R)=1\cdot1\cdot1=1$$\\
+%Thus, $R^{-1}$ exists.\\
+%
+%Then show that $K^{-1}$ exists:\\
+%For camera matrix $$K=\begin{bmatrix}
+%fk_u & fk_ucot\theta & u_0\\
+%0 & \frac{fk_v}{sin\theta} & v_0\\
+%0 & 0 & 1
+%\end{bmatrix}$$\\
+%Since $det(K)=\frac{fk_u\cdot fk_v}{sin\theta}\neq 0$, $K^{-1}$ exists.\\
+%According to what above, $d=R^{-1} K^{-1}v$.\\
+%\subsection*{(c)}
+%From section (b), we know that $d=R^{-1} K^{-1}v$, where $K^{-1}$ and $R^{-1}$ exists.\\
+%Therefore, $Rd=K^{-1}v$\\
+%Then, for any rotation matrix such that, $R^TR = I$, we have:\\
+%\begin{align*}
+%d_{i}^{T}d_j=0\\
+%d_{i}^{T}(R^TR)d_j=0\\
+%\therefore (Rd_i)^TRd_j=0\\
+%\therefore (K^{-1}v_i)^T(K^{-1}v_j)=0\\
+%\end{align*}
+%for $i\neq j$\\
+%\clearpage
+%
+%\section*{Question 2}
+%\subsection*{(a)}
+%No. We need to calibrate the camera with at least two amages. If only one image is used, the linear system becomes rank deficient which means that we'll get something that is not invertible. Since the camera matrix is computed using inverse, we connot obtain a unique solution.\\
+%\subsection*{(b)}
+%The original linear system is:\\
+%$$x=\begin{bmatrix}
+%x_1 & ... & x_n\\
+%y_1 & ... & y_n
+%\end{bmatrix}
+%$$\\
+%$$P=\begin{bmatrix}
+%p_{11} & p_{12} & p_{13} & p_{14}\\
+%p_{21} & p_{22} & p_{23} & p_{24}\\
+%0 & 0 & 0 & 1
+%\end{bmatrix}$$\\
+%$$X=\begin{bmatrix}
+%X_1 & ... & X_n\\
+%Y_1 & ... & Y_n\\
+%Z_1 & ... & Z_n\\
+%1 & ... & 1\\
+%\end{bmatrix}$$
+%$$x = PX$$\\
+%By expanding out the first 3D world to 2D point correspondences, we obtain:\\
+%$$Ax = b$$\\
+%where\\
+%$$A=\begin{bmatrix}
+%X_1 & Y_1 & Z_1 & 1 & 0 & 0 & 0 & 0\\
+%0 & 0 & 0 & 0 & X_1 & Y_1 & Z_1 & 1\\
+%X_2 & Y_2 & Z_2 & 1 & 0 & 0 & 0 & 0\\
+%0 & 0 & 0 & 0 & X_2 & Y_2 & Z_2 & 1\\
+%...
+%\end{bmatrix}
+%, x=
+%\begin{bmatrix}
+%p_{11}\\
+%p_{12}\\
+%p_{13}\\
+%p_{14}\\
+%p_{21}\\
+%p_{22}\\
+%p_{23}\\
+%p_{24}\\
+%\end{bmatrix}, b =
+%\begin{bmatrix}
+%x_1\\
+%y_1\\
+%x_2\\
+%y_2\\
+%...
+%\end{bmatrix}$$
+%Solve by Linear least square:\\
+%$$x = (A^T A)^{-1}A^Tb$$
+%Same reasoning, $P = xX(XX^T)^{-1}$.\\
+%Then, the Euclidean distance between the projected points and the actual point on the image is obtained using the following definition of RMS:\\
+%$$RMS=\sqrt{\sum_{i=1}^{N}\frac{1}{N}((x_i-\bar{x_i})^2+(y_i-\bar{y_i})^2)}$$
+%where N is the number of points.
+%\subsection*{(b)}
+%By selecting 12 points from each picture(24 points in total), the RMS error (in pixels) between the corner positions and the positions predicted by the camera parameters is:
+%$$RMS\ error =  1.3175$$
+%Note: codes are attached
+%\subsection*{(c)}
+%$$Camera\ Matrix = \begin{bmatrix}
+%    1.3543  &  0.0477  &  0.0729 & 157.5264\\
+%   -0.0374   & 1.3308   & 0.3560  & 59.5406\\
+%         0    &     0      &   0   & 1.0000
+%\end{bmatrix}$$
+%Note: codes are attached
+%
+%\section*{Matlab Codes}
+%\begin{lstlisting}
+%function main()
+%clear all;
+%close all;
+%clc;
+%%% Load in images
+%image1 = imread('1.JPG');
+%image2 = imread('2.JPG');
+%figure, imagesc(image1); colormap(gray);
+%title('Click a point on this image'); axis image;
+%%% Select corner - make sure to click in order corresponding to A
+%%% If you want to use my data, just comment this subblock
+%% num_of_points=12;
+%% a = [];
+%% for i = 1:num_of_points
+%%     [x y] = ginput(1);
+%%     a = [a [x;y]]
+%%     image1(round(y),round(x)) = 255;
+%%     imagesc(image1); colormap(gray);
+%%     title('Click a point on this image');
+%%     axis image;
+%% end
+%% figure, imagesc(image2); colormap(gray);
+%% title('Click a point on this image');
+%% axis image;
+%% for i = 1:num_of_points
+%%     [x y] = ginput(1);
+%%     a = [a [x;y]]
+%%     image1(round(y),round(x)) = 255;
+%%     imagesc(image2); colormap(gray);
+%%     title('Click a point on this image');
+%%     axis image;
+%% end
+%% save ground_truth
+%%% Load my data
+%load ground_truth.mat
+%%% 3D coordinates
+%%Build the reference A matrix
+%A = [0 0 0]';
+%for i=1:5
+%    A = [A A(:,end)];
+%    A(1,end)=A(1,end)+35;
+%end
+%A = [A [0 35 0]'];
+%for i=1:5
+%    A = [A A(:,end)];
+%    A(1,end)=A(1,end)+35;
+%end
+%A = [A [0 0 9.5]'];
+%for i=1:5
+%    A = [A A(:,end)];
+%    A(1,end)=A(1,end)+35;
+%end
+%A = [A [0 35 9.5]'];
+%for i=1:5
+%    A = [A A(:,end)];
+%    A(1,end)=A(1,end)+35;
+%end
+%A = [A;ones(1,size(A,2)) ]
+%A_annot = [a; ones(1, size(a,2))]
+%%Solve using least squares
+%P = Calc_P(A', a')
+%%RMS Calculation
+%A_bar = P * A
+%RMS_error = sqrt(mean(sum((A_bar - A_annot).^2,1)))
+%% RMS = 1.3175
+%%--------------------------------------------------------
+%%returns the H matrix given point (3D) and pointp(image) (transformed coordinates)
+%% point is N X 3, pointp is N X 2
+%
+%end
+%
+%function P = Calc_P (standard_point, annot_point)
+%A = [];
+%b = [];
+%%Build matrix A and b
+%for i = 1:size(standard_point,1)
+%    x_now = standard_point(i,1);
+%    x_anno_now = annot_point(i,1);
+%    y_now = standard_point(i,2);
+%    y_anno_now = annot_point(i,2);
+%    z_now =standard_point(i, 3);
+%    %calculates A matrix and B vector
+%    A = [A;
+%        x_now y_now z_now 1 0 0 0 0;
+%        0 0 0 0 x_now y_now z_now 1];
+%    b = [b; x_anno_now; y_anno_now];
+%end
+%%least squares solution
+%x = (A'*A)^-1 * A'*b;
+%P = [x(1) x(2) x(3) x(4);
+%    x(5) x(6) x(7) x(8);
+%    0 0 0 1];
+%end
+%\end{lstlisting}
+\end{document}
