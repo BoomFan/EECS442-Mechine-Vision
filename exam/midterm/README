@@ -1,0 +1,12 @@
+
+1. File 4points.txt has the following format: Each line in these files has 4 values - 
+
+  x1 y1 x2 y2
+
+where (x1,y1) in garden1.jpg corresponds to (x2, y2) in  garden2.jpg
+
+
+2. readPoints function returns 2 outputs - Points1 and Points 2. Both are of size Nx2.
+
+ith row of Points1 (x1, y1) which corresponds to ith row of Points2 (x2, y2)
+where (x1, y1) are in image 1 and (x2, y2) are in image 2
